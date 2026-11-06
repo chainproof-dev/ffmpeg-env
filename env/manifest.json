@@ -6,7 +6,7 @@
   "platform": "linux-x86_64",
   "ffmpeg_commit": "5d85b7bfb2b024fd367ae3a938b4ac46a39e3a26",
   "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg",
-  "ffmpeg_dir": "ffmpeg/",
+  "ffmpeg_dir": ".. (repo root \u2014 native upstream layout)",
   "release_tag": "builds-v1",
   "source_run": {
     "repository": "chainproof-dev/build",
@@ -200,8 +200,8 @@
     }
   ],
   "loader": {
-    "one_command": "source env.sh",
-    "shims": "bin/<tool>-<variant> (e.g. ffmpeg-asan-ubsan, ffprobe-debug, videogen-fate-tools-asan)",
+    "one_command": "source env/env.sh",
+    "shims": "env/bin/<tool>-<variant> (e.g. ffmpeg-asan-ubsan, ffprobe-debug, videogen-fate-tools-asan)",
     "cli": "ffenv list|use|run|run-all|fetch|doctor|info"
   }
 }

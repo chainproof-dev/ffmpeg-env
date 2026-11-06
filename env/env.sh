@@ -10,7 +10,8 @@
 #       ffmpeg-fate-tools-asan, ffmpeg-shared-dev   (+ ffprobe-*, videogen-*)
 #   * all build library dirs are on LD_LIBRARY_PATH (shared-dev .so etc.)
 #   * the ffenv CLI is available (list / use / run / run-all / doctor / info)
-#   * FFMPEG_SRC points at the full FFmpeg source checkout (128k+ commits)
+#   * FFMPEG_SRC points at the full FFmpeg source checkout at the repo root
+#     (native upstream layout: git log/blame/bisect -- libavcodec/... all work)
 #   * sane ASAN_OPTIONS / UBSAN_OPTIONS research defaults are set (overridable)
 #
 # This file is sourced, NOT executed. Do not run it directly.
@@ -47,7 +48,7 @@ fi
 
 # ---- well-known variables -------------------------------------------------
 export FFMPEG_ENV="$FFENV_ROOT"
-export FFMPEG_SRC="$FFENV_ROOT/ffmpeg"
+export FFMPEG_SRC="$(cd "$FFENV_ROOT/.." && pwd)"   # ffmpeg source lives at the repo root
 export FFMPEG_BUILD_ROOT="$FFENV_ROOT/builds"
 export FFENV_MANIFEST="$FFENV_ROOT/manifest.json"
 # Research-friendly sanitizer defaults (only affect instrumented builds;
@@ -93,6 +94,6 @@ for _ffenv_d in "$FFENV_ROOT"/builds/*/bin; do
 done
 echo "ffmpeg-env loaded: $FFENV_ROOT" \
      "($_ffenv_r/$_ffenv_n builds fetched," \
-     "ffmpeg @ $(git -C "$FFENV_ROOT/ffmpeg" rev-parse --short HEAD 2>/dev/null || echo n/a))" >&2
+     "ffmpeg @ $(git -C "$FFENV_ROOT/.." rev-parse --short HEAD 2>/dev/null || echo n/a))" >&2
 echo "  try: ffenv list | ffmpeg-release -version | ffenv run-all -i poc.mp4 -f null -" >&2
 unset _ffenv_n _ffenv_r _ffenv_d
