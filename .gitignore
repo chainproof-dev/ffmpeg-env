@@ -1,3 +1,4 @@
+# --- ffmpeg-env environment rules ------------------------------------------
 # Build payload binaries/libs are distributed as GitHub release assets
 # (files exceed git's 100 MB limit). Install them with:
 #   env/scripts/fetch-builds.sh      (or they auto-fetch on first shim use)
@@ -7,7 +8,65 @@ env/builds/*/lib/
 # fetch cache
 env/.cache/
 
-# editor / OS noise
+# --- upstream FFmpeg build artifacts (kept from FFmpeg's own .gitignore) ---
+*.a
+*.o
+*.objs
+*.o.*
+*.d
+*.def
+*.dll
+*.dylib
+*.exe
+*.exp
+*.gcda
+*.gcno
+*.h.c
+*.ilk
+*.lib
+*.pc
+*.pdb
+*.so
+*.so.*
 *.swp
+*.ver
+*.version
+*.metal.air
+*.metallib
+*.metallib.c
+*.spv
+*.spv.c
+*.spv.gz
+*.gen.c
+*.gen.S
+*.ptx
+*.ptx.c
+*.ptx.gz
+*_g
+\#*
+.\#*
+/.config
+/.version
+/ffmpeg
+/ffplay
+/ffprobe
+/checkasm_config_generated.asm
+/checkasm_config_generated.h
+/checkasm_header_config_generated.h
+/config.asm
+/config.h
+/config_components.asm
+/config_components.h
+/coverage.info
+/lcov/
+/src
+/mapfile
+/tools/python/__pycache__/
+/libavcodec/vulkan/*.c
+/libavfilter/vulkan/*.c
+/.*/
+!/.forgejo/
+
+# editor / OS noise
 *~
 .DS_Store
