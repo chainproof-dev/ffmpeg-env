@@ -1,0 +1,13 @@
+# Build payload binaries/libs are distributed as GitHub release assets
+# (files exceed git's 100 MB limit). Install them with:
+#   scripts/fetch-builds.sh        (or they auto-fetch on first shim use)
+builds/*/bin/
+builds/*/lib/
+
+# fetch cache
+.cache/
+
+# editor / OS noise
+*.swp
+*~
+.DS_Store

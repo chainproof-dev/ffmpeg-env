@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+# ffenv — the ffmpeg-env command line tool.
+#
+# Subcommands:
+#   list                    show all build variants and their status
+#   use <variant>           print an `export PATH=...` line (eval it), or use the
+#                           ffenv-use shell function provided by env.sh
+#   fetch [variant...]      download + verify + install build payloads from the
+#                           GitHub release (see scripts/fetch-builds.sh)
+#   run <variant> <tool>    run a tool (ffmpeg/ffprobe/videogen/...) from one
+#     [args...]             specific variant with the right environment
+#   run-all [tool] [args]   run one command across ALL installed variants,
+#                           collect exit codes + sanitizer hits (PoC triage)
+#   doctor                 health-check every installed build
+#   info [variant]          show manifest details for one/all variants
+#   env                     print ffmpeg-env environment variables
+#   version                 print ffenv version
+set -euo pipefail
+
+FFENV_VERSION="1.0.0"
+
+_ffenv_self="${BASH_SOURCE[0]}"
+while [ -L "$_ffenv_self" ]; do
+  _ffenv_dir="$(cd -P "$(dirname "$_ffenv_self")" && pwd)"
+  _ffenv_self="$(readlink "$_ffenv_self")"
+  case "$_ffenv_self" in
+    /*) ;;
+    *) _ffenv_self="$_ffenv_dir/$_ffenv_self" ;;
+  esac
+done
+FFENV_ROOT="$(cd -P "$(dirname "$_ffenv_self")/.." && pwd)"
+export FFENV_ROOT
+
+# shellcheck source=scripts/ffenv-lib.sh
+. "$FFENV_ROOT/scripts/ffenv-lib.sh"
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift || true
+
+usage() {
+  sed -n '2,/^set -euo pipefail$/p' "$0" | sed '1d;$d' | sed 's/^# \{0,1\}//'
+}
+
+cmd_list() {
+  printf '%-16s %-12s %-30s %-11s %s\n' "VARIANT" "STATUS" "TOOLS" "LIB" "DESCRIPTION"
+  while IFS=$'\t' read -r name tools _url _sha _bytes _aid lib_type desc; do
+    local status="not-fetched"
+    ffenv_is_installed "$name" && status="ready"
+    printf '%-16s %-12s %-30s %-11s %s\n' "$name" "$status" "$tools" "$lib_type" "$desc"
+  done < <(ffenv_registry_rows)
+  echo
+  echo "payload binaries are fetched from the GitHub release automatically when needed"
+  echo "(FFENV_AUTO_FETCH=0 disables); or explicitly:  ffenv fetch [variant ...]"
+}
+
+cmd_use() {
+  local v="${1:-}"
+  [ -z "$v" ] && { echo "usage: ffenv use <variant>   (see: ffenv list)" >&2; return 2; }
+  if ! ffenv_registry_rows | awk -F'\t' -v x="$v" '$1==x{found=1} END{exit !found}'; then
+    echo "ffenv: unknown variant '$v'" >&2; return 2
+  fi
+  if ! ffenv_is_installed "$v"; then
+    echo "# note: variant '$v' is not fetched yet — the exported PATH will only work after: ffenv fetch $v" >&2
+  fi
+  printf 'export PATH="%s/builds/%s/bin:%s"\n' "$FFENV_ROOT" "$v" '$PATH'
+}
+
+cmd_fetch() {
+  exec bash "$FFENV_ROOT/scripts/fetch-builds.sh" "$@"
+}
+
+cmd_run() {
+  local v="${1:-}" tool="${2:-}"
+  if [ -z "$v" ] || [ -z "$tool" ]; then
+    echo "usage: ffenv run <variant> <tool> [args...]" >&2; return 2
+  fi
+  shift 2 || true
+  local shim="$FFENV_ROOT/bin/$tool-$v"
+  if [ -x "$shim" ]; then
+    exec "$shim" "$@"
+  fi
+  local bin="$FFENV_ROOT/builds/$v/bin/$tool"
+  if [ ! -x "$bin" ]; then
+    echo "ffenv: no tool '$tool' in variant '$v' (try: ffenv list)" >&2; return 127
+  fi
+  ffenv_run_env "$v" "$bin" "$@"
+}
+
+cmd_run_all() {
+  local tool="ffmpeg"
+  if [ $# -gt 0 ] && ffenv_registry_rows | cut -f2 | tr ',' '\n' | grep -xq -- "$1"; then
+    tool="$1"; shift
+  fi
+  local logdir="${FFENV_LOGDIR:-/tmp/ffenv-runall}"
+  mkdir -p "$logdir"
+  local stamp; stamp="$(date +%Y%m%d-%H%M%S)"
+  local fails=0 total=0
+  echo "ffenv run-all: tool=$tool  args=$*  timeout=${FFENV_TIMEOUT:-60}s  logs=$logdir"
+  echo
+  local name tools v log rc hits first
+  while IFS=$'\t' read -r name tools _r2 _r3 _r4 _r5 _r6 _r7; do
+    case ",$tools," in *",$tool,"*) ;; *) continue ;; esac
+    ffenv_is_installed "$name" || continue
+    total=$((total + 1))
+    log="$logdir/$stamp-$name.log"
+    set +e
+    timeout "${FFENV_TIMEOUT:-60}" "$FFENV_ROOT/bin/$tool-$name" "$@" >"$log" 2>&1
+    rc=$?
+    set -e
+    hits=$(grep -cE 'ERROR: AddressSanitizer|LeakSanitizer|runtime error:|SUMMARY: (Address|Undefined)Sanitizer|Assertion .* failed' "$log" || true)
+    first=$(grep -m1 -E 'ERROR: AddressSanitizer|LeakSanitizer|runtime error:|SUMMARY: (Address|Undefined)Sanitizer|Assertion .* failed' "$log" || true)
+    printf '%-16s rc=%-4s sanitizer_hits=%-4s %s\n' "$name" "$rc" "${hits:-0}" "${first:0:100}"
+    [ "$rc" -ne 0 ] && fails=$((fails + 1))
+  done < <(ffenv_registry_rows)
+  echo
+  echo "ran $total variant(s), $fails nonzero exit(s). full logs: $logdir/$stamp-*.log"
+  [ "$total" -eq 0 ] && echo "no installed variant provides '$tool' — try: ffenv fetch" >&2
+  [ "$fails" -eq 0 ]
+}
+
+cmd_doctor() {
+  local fails=0 total=0 v ver cmt so_missing
+  while IFS=$'\t' read -r v _t _u _s _b _a _l _d; do
+    ffenv_is_installed "$v" || { printf '%-16s SKIP (not fetched)\n' "$v"; continue; }
+    total=$((total + 1))
+    cmt="$(sed -n '1p' "$FFENV_ROOT/builds/$v/build-info/FFMPEG_COMMIT.txt" 2>/dev/null || echo '?')"
+    ver="$(ffenv_run_env "$v" "$FFENV_ROOT/builds/$v/bin/ffmpeg" -version 2>&1 | sed -n '1p' || true)"
+    so_missing=""
+    if ls "$FFENV_ROOT/builds/$v/lib/"*.so* >/dev/null 2>&1; then
+      so_missing="$(ldd "$FFENV_ROOT/builds/$v/bin/ffmpeg" 2>/dev/null | grep -c 'not found' || true)"
+    fi
+    if [ -n "$ver" ] && [ "${so_missing:-0}" -eq 0 ]; then
+      printf '%-16s PASS  %-52s ffmpeg@%s\n' "$v" "$ver" "${cmt:0:10}"
+    else
+      printf '%-16s FAIL  %-52s missing_so=%s\n' "$v" "$ver" "${so_missing:-?}"
+      fails=$((fails + 1))
+    fi
+  done < <(ffenv_registry_rows)
+  echo
+  echo "checked $total installed build(s), $fails failure(s)"
+  [ "$fails" -eq 0 ]
+}
+
+cmd_info() {
+  local v="${1:-}"
+  if command -v python3 >/dev/null 2>&1 && [ -f "$FFENV_MANIFEST" ]; then
+    python3 - "$FFENV_MANIFEST" "$v" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+want = sys.argv[2] if len(sys.argv) > 2 else None
+if want:
+    for v in m["variants"]:
+        if v["name"] == want:
+            print(json.dumps(v, indent=2))
+            sys.exit(0)
+    sys.exit(f"no such variant: {want}")
+print("ffmpeg_commit:", m["ffmpeg_commit"])
+print("release_tag:  ", m["release_tag"])
+print("source_run:   ", m["source_run"]["run_url"])
+for v in m["variants"]:
+    print("\n%s — %s" % (v["name"], v["label"]))
+    print("  tools:    %s" % ", ".join(v["tools"]))
+    print("  lib:      %s" % v["lib_type"])
+    print("  desc:     %s" % v["description"])
+    print("  best for: %s" % v["recommended_for"])
+    print("  asset:    %s (%d MB, sha256 %s...)" % (v["asset_url"], v["asset_bytes"] >> 20, v["asset_sha256"][:16]))
+PY
+  else
+    cat "$FFENV_MANIFEST"
+  fi
+}
+
+cmd_env() {
+  echo "FFENV_ROOT=$FFENV_ROOT"
+  echo "FFMPEG_ENV_ROOT=${FFMPEG_ENV_ROOT:-$FFENV_ROOT}"
+  echo "FFMPEG_SRC=${FFMPEG_SRC:-$FFENV_ROOT/ffmpeg}"
+  echo "FFMPEG_BUILD_ROOT=${FFMPEG_BUILD_ROOT:-$FFENV_ROOT/builds}"
+  echo "FFENV_MANIFEST=$FFENV_MANIFEST"
+  echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"
+  echo "ASAN_OPTIONS=${ASAN_OPTIONS:-}"
+  echo "UBSAN_OPTIONS=${UBSAN_OPTIONS:-}"
+}
+
+case "$cmd" in
+  list)    cmd_list "$@" ;;
+  use)     cmd_use "$@" ;;
+  fetch)   cmd_fetch "$@" ;;
+  run)     cmd_run "$@" ;;
+  run-all) cmd_run_all "$@" ;;
+  doctor)  cmd_doctor "$@" ;;
+  info)    cmd_info "$@" ;;
+  env)     cmd_env "$@" ;;
+  version) echo "ffenv $FFENV_VERSION (ffmpeg-env)" ;;
+  help|-h|--help) usage ;;
+  *) echo "ffenv: unknown command '$cmd' (try: ffenv help)" >&2; exit 2 ;;
+esac

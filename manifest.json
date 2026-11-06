@@ -1,0 +1,207 @@
+{
+  "schema": "ffmpeg-env/manifest",
+  "schema_version": 1,
+  "name": "ffmpeg-env",
+  "purpose": "Prebuilt FFmpeg security-research runtimes + full FFmpeg source history + one-command environment loader for PoC testing and security research.",
+  "platform": "linux-x86_64",
+  "ffmpeg_commit": "5d85b7bfb2b024fd367ae3a938b4ac46a39e3a26",
+  "ffmpeg_source": "https://github.com/FFmpeg/FFmpeg",
+  "ffmpeg_dir": "ffmpeg/",
+  "release_tag": "builds-v1",
+  "source_run": {
+    "repository": "chainproof-dev/build",
+    "workflow": "Build FFmpeg Security Runtimes",
+    "run_id": "42171320091",
+    "run_number": 45,
+    "run_url": "https://github.com/chainproof-dev/build/actions/runs/42171320091",
+    "event": "workflow_dispatch",
+    "conclusion": "success",
+    "head_branch": "main",
+    "build_repo_commit": "794feda50f5590f276918e6045dc9a1d9a929755",
+    "created_at": "2026-11-06T05:56:02Z",
+    "updated_at": "2026-11-06T06:48:57Z",
+    "triggering_actor": "chainproof-dev"
+  },
+  "sanitizer_defaults": {
+    "ASAN_OPTIONS": "detect_leaks=0:abort_on_error=1:halt_on_error=1:symbolize=1:allocator_may_return_null=1",
+    "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
+  },
+  "variants": [
+    {
+      "name": "asan-ubsan",
+      "label": "ASan + UBSan",
+      "description": "AddressSanitizer + UndefinedBehaviorSanitizer instrumented build (static libs). Primary build for memory-corruption PoC triage.",
+      "recommended_for": "heap/stack overflows, UAF, integer UB in PoCs",
+      "tools": [
+        "ffmpeg",
+        "ffprobe",
+        "videogen"
+      ],
+      "binaries": [
+        {
+          "name": "ffmpeg",
+          "bytes": 353968936
+        },
+        {
+          "name": "ffprobe",
+          "bytes": 350411072
+        },
+        {
+          "name": "videogen",
+          "bytes": 16952
+        }
+      ],
+      "lib_type": "static (.a)",
+      "artifact_name": "ffmpeg-asan-ubsan-x64-linux",
+      "artifact_id": 13481239939,
+      "asset_url": "https://github.com/chainproof-dev/ffmpeg-env/releases/download/builds-v1/ffmpeg-asan-ubsan-x64-linux.zip",
+      "asset_sha256": "48e6e109735cba74f5264c444da94872384f0642b77d0a986a9c2b200395c6d7",
+      "asset_bytes": 371979024
+    },
+    {
+      "name": "debug",
+      "label": "Debug",
+      "description": "Debug build with symbols and assertions enabled, static libs.",
+      "recommended_for": "assertion failures, gdb debugging, backtraces",
+      "tools": [
+        "ffmpeg",
+        "ffprobe"
+      ],
+      "binaries": [
+        {
+          "name": "ffmpeg",
+          "bytes": 89598680
+        },
+        {
+          "name": "ffprobe",
+          "bytes": 88798168
+        }
+      ],
+      "lib_type": "static (.a)",
+      "artifact_name": "ffmpeg-debug-x64-linux",
+      "artifact_id": 13481432425,
+      "asset_url": "https://github.com/chainproof-dev/ffmpeg-env/releases/download/builds-v1/ffmpeg-debug-x64-linux.zip",
+      "asset_sha256": "6b8954d6b4ed0f7b268d27f1b5c64a181f516d59d769cfd5b146da93999858a2",
+      "asset_bytes": 268167585
+    },
+    {
+      "name": "fate-tools-asan",
+      "label": "FATE tools + ASan",
+      "description": "ASan instrumented build including FATE tools and the videogen PoC input generator (static libs).",
+      "recommended_for": "FATE-style regression testing, PoC generation with videogen",
+      "tools": [
+        "ffmpeg",
+        "ffprobe",
+        "videogen"
+      ],
+      "binaries": [
+        {
+          "name": "ffmpeg",
+          "bytes": 480284408
+        },
+        {
+          "name": "ffprobe",
+          "bytes": 476314872
+        },
+        {
+          "name": "videogen",
+          "bytes": 16952
+        }
+      ],
+      "lib_type": "static (.a)",
+      "artifact_name": "ffmpeg-fate-tools-asan-x64-linux",
+      "artifact_id": 13483433618,
+      "asset_url": "https://github.com/chainproof-dev/ffmpeg-env/releases/download/builds-v1/ffmpeg-fate-tools-asan-x64-linux.zip",
+      "asset_sha256": "2f37e6dccde441f3cce7cd2413a7bba633ac4004e209c8a5453840df6cff263f",
+      "asset_bytes": 375225378
+    },
+    {
+      "name": "release",
+      "label": "Release (optimized)",
+      "description": "Optimized release build, full feature set, static libs. Default build for functionality checks.",
+      "recommended_for": "functionality / baseline behavior, performance",
+      "tools": [
+        "ffmpeg",
+        "ffprobe"
+      ],
+      "binaries": [
+        {
+          "name": "ffmpeg",
+          "bytes": 132803448
+        },
+        {
+          "name": "ffprobe",
+          "bytes": 131709168
+        }
+      ],
+      "lib_type": "static (.a)",
+      "artifact_name": "ffmpeg-release-x64-linux",
+      "artifact_id": 13481137366,
+      "asset_url": "https://github.com/chainproof-dev/ffmpeg-env/releases/download/builds-v1/ffmpeg-release-x64-linux.zip",
+      "asset_sha256": "72dcade3fa5326005b3bf012851ed7adef1b7b96a4539450f8e4cc9a11822a7c",
+      "asset_bytes": 189564540
+    },
+    {
+      "name": "shared-dev",
+      "label": "Shared libs (dev)",
+      "description": "Shared-library build: dynamically linked ffmpeg/ffprobe + libav*.so + headers. Use for linking custom tools against FFmpeg libraries.",
+      "recommended_for": "building custom harnesses/linking against libav*",
+      "tools": [
+        "ffmpeg",
+        "ffprobe"
+      ],
+      "binaries": [
+        {
+          "name": "ffmpeg",
+          "bytes": 1936472
+        },
+        {
+          "name": "ffprobe",
+          "bytes": 797000
+        }
+      ],
+      "lib_type": "shared (.so)",
+      "artifact_name": "ffmpeg-shared-dev-x64-linux",
+      "artifact_id": 13482892719,
+      "asset_url": "https://github.com/chainproof-dev/ffmpeg-env/releases/download/builds-v1/ffmpeg-shared-dev-x64-linux.zip",
+      "asset_sha256": "9681edc621ef380069ea01511e479efb2fbcb26d1b9bd636652d50060e3e95ca",
+      "asset_bytes": 155675672
+    },
+    {
+      "name": "ubsan-strict",
+      "label": "UBSan (strict)",
+      "description": "UndefinedBehaviorSanitizer strict build that halts on the first undefined behavior (static libs).",
+      "recommended_for": "integer overflow, shift/misalignment UB detection",
+      "tools": [
+        "ffmpeg",
+        "ffprobe",
+        "videogen"
+      ],
+      "binaries": [
+        {
+          "name": "ffmpeg",
+          "bytes": 163333712
+        },
+        {
+          "name": "ffprobe",
+          "bytes": 161720672
+        },
+        {
+          "name": "videogen",
+          "bytes": 16952
+        }
+      ],
+      "lib_type": "static (.a)",
+      "artifact_name": "ffmpeg-ubsan-strict-x64-linux",
+      "artifact_id": 13482842501,
+      "asset_url": "https://github.com/chainproof-dev/ffmpeg-env/releases/download/builds-v1/ffmpeg-ubsan-strict-x64-linux.zip",
+      "asset_sha256": "1129ba3f989bac86beae6f35ff79fc48d506dcfabadafd2d757e59667bc2eb98",
+      "asset_bytes": 207408981
+    }
+  ],
+  "loader": {
+    "one_command": "source env.sh",
+    "shims": "bin/<tool>-<variant> (e.g. ffmpeg-asan-ubsan, ffprobe-debug, videogen-fate-tools-asan)",
+    "cli": "ffenv list|use|run|run-all|fetch|doctor|info"
+  }
+}
